@@ -19,7 +19,9 @@ quarto add RamanaVais/quarto-neutral-reveal
 ```
 
 仓库地址：<https://github.com/RamanaVais/quarto-neutral-reveal>；固定到已发布版本可写 `RamanaVais/quarto-neutral-reveal@v1.0.1`。本地演练可用本地目录路径或 zip。  
-`quarto add` **只安装 `_extensions/` 里的内容**，仓库根目录的 README / LICENSE / 渲染产物不会被带过去。
+`quarto add` **只安装 `_extensions/` 里的内容**，仓库根目录的 README / LICENSE / 渲染产物不会被带过去；LICENSE 请到仓库查看。
+
+从 GitHub 安装时扩展落在 `_extensions/RamanaVais/neutral/`，用本地目录路径 / zip 安装时落在 `_extensions/neutral/`。两者格式名都是 `neutral-revealjs`，Quarto 会自动重写 CSS 与过滤器路径，**不需要改 qmd**。
 
 `quarto use template` 必须在**目标目录内**执行（它只接受一个 `<target>` 参数）。
 
@@ -127,12 +129,12 @@ quarto render mydeck.qmd -M embed-resources:false -M html-math-method:mathjax -o
 
 |         | 单文件版            | live 版                                                                                      |
 | :------ | :-------------- | :------------------------------------------------------------------------------------------ |
-| 分发携带    | 仅 `mydeck.html` | `mydeck-live.html` + `mydeck_files/` + `figures/`（若有内容图）+ `_extensions/neutral/neutral.css` |
+| 分发携带    | 仅 `mydeck.html` | `mydeck-live.html` + `mydeck_files/` + `figures/`（若有内容图）+ 扩展安装目录下的 `neutral.css` |
 | 公式      | 构建期 MathML（离线）  | MathJax（需联网，jsdelivr CDN）                                                                   |
 | 讲者视图    | 可能失效            | 正常                                                                                          |
 | 改 CSS 后 | 必须重渲            | 改 `neutral.css` 刷新即可                                                                        |
 
-live 版的外链主题样式指向 `_extensions/neutral/neutral.css`（Quarto 保留扩展目录的相对路径，不会复制进 `*_files/`）。因为该 CSS 内已无相对路径图片，携带这一个文件即可，不需要额外 logo 资产。
+live 版的外链主题样式指向**扩展安装目录**下的 `neutral.css`（Quarto 保留扩展目录的相对路径，不会复制进 `*_files/`）。路径随安装方式变化：从 GitHub 安装是 `_extensions/RamanaVais/neutral/neutral.css`，从本地目录 / zip 安装是 `_extensions/neutral/neutral.css`。以生成 HTML 里的 `<link href="...">` 为准，把对应目录一起带上；路径由 Quarto 自动重写，格式名与渲染行为不受影响。因为该 CSS 内已无相对路径图片，携带这一个文件即可，不需要额外 logo 资产。
 
 其它：`?print-pdf` 导 PDF、`M` 键目录、`S` 键讲者视图、`.fragment` 动画、`::: {.notes}` 备注、圆点点击跳转都可用。
 
@@ -183,6 +185,8 @@ live 版的外链主题样式指向 `_extensions/neutral/neutral.css`（Quarto �
 | `quarto add <本地目录>`                                            | 只安装 `_extensions/`，根目录文件不带                                                                                                                     |
 | `quarto use template --no-prompt <本地目录>`                       | 在目标目录内执行；`template.qmd` 自动重命名为目录名；生成项目可直接渲染                                                                                                    |
 | `.quartoignore`                                                | 必需：根目录的 `*.html` / `*_files/` 等产物默认会被一起复制给使用者                                                                                                  |
+| `quarto add RamanaVais/quarto-neutral-reveal`                    | 公开 GitHub 仓库安装成功，识别为 `Neutral Reveal 1.0.1 (format)`，扩展落在 `_extensions/RamanaVais/neutral/`                                                  |
+| `quarto use template --no-prompt RamanaVais/quarto-neutral-reveal` | 自动装好扩展，复制 `CONTRACT.md` / `examples/` / 重命名后的 qmd；单文件版与 live 版均渲染通过，live 版 CSS 链到 `_extensions/RamanaVais/neutral/neutral.css`        |
 
 ## 已知限制
 
@@ -198,6 +202,7 @@ live 版的外链主题样式指向 `_extensions/neutral/neutral.css`（Quarto �
 
 ```
 _extensions/neutral/          ← quarto add 实际安装的全部内容
+                              （从 GitHub 安装会多一层 owner：_extensions/RamanaVais/neutral/）
   _extension.yml              格式默认值
   neutral.css                 主题样式（A–P 段）
   title-slide.html            封面 Pandoc partial
