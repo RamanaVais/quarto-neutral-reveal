@@ -1,10 +1,30 @@
-# 开发 / 渲染产物不随模板复制给使用者
+# 决定哪些文件不随 `quarto use template` 复制给使用者。
+#
+# 语义（Quarto 1.11.9 templateFiles → resolvePathGlobs → Deno expandGlobSync）：
+#   · 模式**按路径整串匹配**，`*` 只匹配一级（不跨 `/`），`**` 才跨级；
+#   · 前导 `/` **不是** gitignore 的「锚定根目录」，它会让模式永远匹配不到
+#     （globToRegExp 把 `/` 当路径首字符，而这里比对的是相对路径）——
+#     所以别写 `/*.html`；
+#   · `!x` 只会抵消**文字完全相同**的那条排除项，不是 gitignore 的反向包含。
+#
+# 这条纪律最重要：媒体里也有 .html（figures/media/embed-demo.html 是示例页的
+# iframe 目标），所以绝不能写 `**/*.html` 一把梭。
+
+# 根目录渲染产物
 *.html
 *.pdf
-*_files/
+
+# examples/ 的渲染产物
+examples/*.html
+
+# 任意层级的 supporting files 目录
+**/*_files/**
+
+# 根目录草稿
 _*.png
-_*.html
 _*.qmd
 _*.lua
-.git/
+
+# git 元数据
+.git/**
 .gitignore

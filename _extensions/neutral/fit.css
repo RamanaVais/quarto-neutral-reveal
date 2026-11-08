@@ -1,0 +1,254 @@
+/* =========================================================================
+   fit.css —— 交互组件自适应容器（Neutral Reveal 1.3.0）
+
+   替换掉的三件事：
+     1. 旧做法用 overflow:hidden 把溢出「裁掉」，看着没有滚动条，其实内容缺了；
+     2. 尺寸靠 #| fig-height / Plot height 这类为 1280×720 试出来的常量；
+     3. .cell-output-display 没有确定高度，所以 max-height:100% 根本不生效。
+
+   作者接口：给一页内容包一层 :::: {.fit}，其余交给本文件 + fit.html。
+   1.2.0 起覆盖 7 类：plotly / DT / OJS·Observable Plot / 其它 htmlwidget /
+                图片·figure / iframe·video / 普通表格 / 任意 SVG。
+   1.3.0 起 .panel 内的一切内容都不归本文件管（见 §10）。
+   契约见 FIT-CONTRACT.md（CONTRACT.md 保持不变）。
+
+   几何前提（来自 neutral.css，不要在这里另设常量）：
+     section 内容盒 = 1176 × 557.34px；页眉 52px 绝对定位不占流；
+     页脚金线 y=677.2；58% 栏 682px / 38% 栏 447px。
+   ========================================================================= */
+
+/* ---- 1. 容器 ---------------------------------------------------------------
+   section 是 position:absolute + height:100%，高度是确定值，所以 .fit 的
+   height:100% 解析到内容盒，不需要任何像素常量。
+   同时支持作者用 ## 标题 {.fit} 把类挂在 section 上（若类名能透传）。 */
+.reveal .slides section .fit,
+.reveal .slides section.fit {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 默认不伸缩：说明文字、滑块行保持自然高度，绝不被图表挤压变形 */
+.reveal .slides section .fit > * {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+/* ---- 2. 版式行 -------------------------------------------------------------
+   .columns 吃剩余高度；方向仍是 row（neutral.css 的 align-items:stretch
+   会让两栏等高，栏内再纵向分配）。 */
+.reveal .slides section .fit > .columns {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ---- 3. 栏 -----------------------------------------------------------------
+   纵向继续下钻，并干掉 Pandoc 默认模板注入的横向滚动条：
+     @media screen { div.column { overflow-x: auto } }
+   这是「明明没横向溢出却有滚动条」的真凶。 */
+.reveal .slides section .fit .column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: visible !important;
+}
+
+/* ---- 4. 宿主链 -------------------------------------------------------------
+   fit.html 只给真正装 widget 的 .cell 打 data-fit-host；
+   滑块那三个 OJS 声明 cell 不打标记，因此保持自然高度。 */
+.reveal .slides section .fit .cell[data-fit-host] {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.reveal .slides section .fit .cell[data-fit-host] > .cell-output-display {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+/* ---- 5. 叶子：widget 根节点撑满 --------------------------------------------
+   !important 是为了压过构建期写进 style 的 height:480px（#| fig-height: 5）。
+   这样即使文档不改，旧写法也会被接管。 */
+.reveal .slides section .fit .html-widget,
+.reveal .slides section .fit [id^="ojs-cell-"]:not([data-nodetype="declaration"]) {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Observable Plot 的 svg 尺寸由 fit.html 按 viewBox 精确计算。
+   这里不能设 max-width:100%，否则会和 JS 写进去的 px 值打架。 */
+.reveal .slides section .fit [id^="ojs-cell-"] > svg {
+  display: block;
+  margin: auto;
+}
+
+/* ---- 6. 数据表 -------------------------------------------------------------
+   旧规则 table{width:94%!important; table-layout:fixed} 与 DT 的 autoWidth
+   打架，是「最后一列被裁掉」的元凶；改成 100% + 自动列宽，字号由 JS 二分。 */
+.reveal .slides section .fit .datatables {
+  display: flex;
+  flex-direction: column;
+}
+.reveal .slides section .fit .dataTables_wrapper {
+  width: 100% !important;
+  height: 100%;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* 行数少的表（3 行）撑不满一屏，居中放才不显得「上面一块、下面一片空」 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.reveal .slides section .fit table.dataTable {
+  width: 100% !important;
+}
+
+/* ---- 7. 打印护栏（最容易踩的坑）-------------------------------------------
+   reveal 的打印样式是：
+     html.reveal-print .reveal .slides section { padding:0!important; display:block!important }
+     html.reveal-print .reveal .slides .pdf-page { overflow:hidden }
+   内容盒会从 557.34 变成 720（偏 162.66px），然后被 .pdf-page 硬裁。
+   不去和 section 抢特异性，改由 .fit 自己补回同一套 padding。 */
+html.reveal-print .reveal .slides section .fit,
+html.print-pdf .reveal .slides section .fit {
+  padding: var(--y-body) var(--pad-x) calc(60 * var(--pt));
+  box-sizing: border-box;
+}
+
+/* ---- 8. 急停与降级 --------------------------------------------------------- */
+html[data-fit="off"] .reveal .slides section .fit {
+  display: block;
+  height: auto;
+}
+.reveal .slides section .fit [data-fit-allow-scroll] {
+  overflow: auto !important;
+}
+
+/* 只在开启 fit-debug 时标出未适配的宿主，平时不干扰视觉 */
+html[data-fit-debug] .reveal .slides section .fit [data-fit-warn] {
+  outline: 2px solid #c00;
+  outline-offset: -2px;
+}
+
+/* ---- 9. 静态内容：图片 / 媒体 / 普通表格 / 任意 SVG ------------------------
+   1.1.0 只认 .html-widget 与 ojs-cell，图片和 figure 根本不进队列，包了 .fit
+   也不生效。这里把「静态内容」也纳入同一条高度链：
+     · 块级宿主（figure / .cell-output-display / p / div.mermaid）→ flex 生长，
+       img/video/iframe 用 object-fit:contain 装箱，永不拉伸、永不裁切；
+     · 图片自身就是宿主（裸 <img> 直接挂在 .fit 下）→ 自身当叶子；
+     · 普通表格 → 只做宽度约束，字号由 fit.html 二分，不设 table-layout；
+     · SVG → 由 fit.html 补 viewBox 后等比 contain（含 mermaid / graphviz）。
+   公式（MathJax 的 <svg class="math-svg">）绝不能进来，JS 侧已双重排除。 */
+
+/* 宿主：块级包装（.quarto-figure / figure / .cell-output-display / p / 自身）。
+   img/video/iframe/svg/table 自身当宿主时不能套这条：table 变 flex 会毁掉表格布局。 */
+.reveal .slides section .fit [data-fit-static]:not(img):not(video):not(iframe):not(svg):not(table) {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* 中间层：Quarto 给每张图套了 .quarto-figure > figure > p 三层（p 里才是 img）。
+   任何一层不生长，里面的图就还是自然高度——首版正是栽在这里：p 高 1063px，
+   整页溢出 306px。统一让这三层都变纵向 flex 并继承高度。 */
+.reveal .slides section .fit [data-fit-static] .quarto-figure,
+.reveal .slides section .fit [data-fit-static] figure,
+.reveal .slides section .fit [data-fit-static] p,
+.reveal .slides section .fit [data-fit-static] > div,
+.reveal .slides section .fit [data-fit-static] figure > div {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 叶子：吃掉图题之外的全部高度，contain 保证不变形、不裁切 */
+.reveal .slides section .fit [data-fit-static] img,
+.reveal .slides section .fit [data-fit-static] video,
+.reveal .slides section .fit [data-fit-static] iframe {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  /* 压过 .panel .cell figure img{max-height:150pt} 这类固定上限 */
+  max-height: none !important;
+  object-fit: contain;
+}
+
+/* 图题保持自然高度，不参与伸缩；否则长图题会把图挤扁 */
+.reveal .slides section .fit [data-fit-static] figcaption {
+  flex: 0 0 auto;
+}
+
+/* 图片自身即宿主（没有 figure / p 包裹时）*/
+.reveal .slides section .fit img[data-fit-static],
+.reveal .slides section .fit video[data-fit-static],
+.reveal .slides section .fit iframe[data-fit-static] {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: none !important;
+  object-fit: contain;
+}
+
+/* 普通表格：不能靠 flex 撑高（表格高由内容决定），只约束宽度、居中。
+   display:table 是必须的——被上面的 flex 规则接管的 <table> 会毁掉表格布局。 */
+.reveal .slides section .fit table[data-fit-static] {
+  flex: 0 0 auto;
+  display: table;
+  align-self: center;
+  margin: auto 0;
+  max-width: 100%;
+}
+
+/* 任意 SVG（mermaid / graphviz / 手写 svg）作为宿主：
+   尺寸由 fit.html 写成内联 px，这里只负责居中，不能再设 100% 宽高。 */
+.reveal .slides section .fit svg[data-fit-static] {
+  flex: 1 1 0;
+  min-height: 0;
+  display: block;
+  margin: auto;
+  max-width: 100%;
+}
+.reveal .slides section .fit [data-fit-static="svg"] svg {
+  display: block;
+  margin: auto;
+  max-width: 100%;
+}
+
+/* ---- 10. 与 panel 的边界（1.3.0）----------------------------------------
+   .panel 内的媒体由 neutral.css H3 的 data-media 负责，高度源是 grid 轨道
+   （4 宫格 187.75pt），不是 section 内容盒（1176×557.34）。两套高度源互斥：
+     · .fit 里不要放 .panel；
+     · panel 内的图/视频/iframe 不要包 .fit，写 data-media。
+   fit.html 的 collect().push()、collectStatic().ok() 与 add() 三处都已
+   跳过 el.closest('.panel')，所以运行时不会给 panel 的 cell 打 data-fit-host，
+   也不会把 .cell[data-split] 的 grid 顶成 flex。
+   本文件因此不该、也不会出现任何 .panel 选择器。 */

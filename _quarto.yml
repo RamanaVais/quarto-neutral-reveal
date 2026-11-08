@@ -1,0 +1,9 @@
+# 只干一件事：让子目录里的文档能找到根目录的 _extensions/。
+#
+# 解析 format 时，Quarto 从「被渲染文件的目录」向上找到 project 根为止；
+# 没有 project 根时只看文件自己的目录（project.dir = dirname(source)），
+# examples/lecture.qmd 会直接报 "Format neutral-revealjs not found"。
+#
+# 使用者用 `quarto use template` 拿到的目录里，这个文件保证 examples/ 能渲染。
+project:
+  type: default

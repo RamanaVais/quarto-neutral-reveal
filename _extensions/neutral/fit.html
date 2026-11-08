@@ -1,0 +1,442 @@
+<script>
+/* =========================================================================
+   fit.html —— 交互组件自适应运行时（Neutral Reveal 1.3.0）
+
+   由 include-after-body 注入，位于 Reveal.initialize() 之后（与 chrome.html 同一通道）。
+   职责：拿到容器的真实像素后，按组件类型重排，让内容完整落在给定区域内。
+
+   · plotly      → Plotly.relayout 按容器实测像素重算（不动 autosize）
+   · DT 数据表    → 按实例注入 <style>，对字号二分，直到整表塞进可用宽高
+   · 普通表格     → 与 DT 同一套二分，只是不碰 DataTables 的 DOM
+   · OJS / Plot  → 补 viewBox 后按 contain 等比缩放（xMidYMid meet，永不裁切）
+   · 图片 / 媒体  → 宿主 flex 生长 + object-fit:contain（CSS 负责，JS 只验收）
+   · 任意 SVG    → 同 OJS：补 viewBox 后 contain（含 mermaid / graphviz）
+   · 未知 widget → 容器约束 + 内部元素 max-width/height，放不下就打 data-fit-warn
+
+   静态内容的识别刻意保守：低于 30% 栏宽的图片/媒体、200px 以下的 SVG、
+   MathJax 公式（.math-svg / mjx-container）、图题内的小图标都不接管。
+
+   无 .fit 标记时：不做任何 DOM 变更、不注册任何监听。
+   .panel 内的一切内容一律不接管（高度源是 grid 轨道，归 neutral.css H3 的
+   data-media 管），否则会给 cell 打 data-fit-host，把 [data-split] 的 grid 顶成 flex。
+   契约见 FIT-CONTRACT.md。
+   ========================================================================= */
+(function () {
+  'use strict';
+  if (!window.Reveal) return;
+
+  var root = document.documentElement;
+  if (root.getAttribute('data-fit') === 'off') return;
+
+  var VERSION = '1.3.0';
+  var CFG = readCfg();
+  if (CFG.off) return;
+
+  var busy = false;
+  var pending = [];
+
+  /* ---- 配置：由 fit-options.lua 从 YAML 写成 <meta name="neutral-fit"> ---- */
+  function readCfg() {
+    var c = { minFont: 9, maxFont: 18, scaleMin: 0.55, scaleMax: 1.8, debug: false, off: false };
+    var m = document.querySelector('meta[name="neutral-fit"]');
+    if (!m) return c;
+    String(m.getAttribute('content') || '').split(';').forEach(function (kv) {
+      var p = kv.split('=');
+      if (p.length !== 2) return;
+      var k = p[0].trim(), v = p[1].trim();
+      if (k === 'fit-debug') c.debug = (v === '1' || v === 'true');
+      else if (k === 'fit-min-font') c.minFont = parseFloat(v) || c.minFont;
+      else if (k === 'fit-max-font') c.maxFont = parseFloat(v) || c.maxFont;
+      else if (k === 'fit-mode' && v === 'off') c.off = true;
+      else if (k === 'fit-allow-scroll' && (v === '1' || v === 'true')) c.allowScroll = true;
+    });
+    if (c.debug) root.setAttribute('data-fit-debug', '');
+    return c;
+  }
+
+  function isPrint() {
+    return /print-pdf/.test(location.search) || root.classList.contains('print-pdf');
+  }
+
+  function scopesOf(sec) {
+    if (!sec) return [];
+    if (sec.classList && sec.classList.contains('fit')) return [sec];
+    return Array.prototype.slice.call(sec.querySelectorAll('.fit'));
+  }
+
+  /* ---- panel 边界（1.3.0）：panel 内的高度源是 grid 轨道，不是 section 内容盒 */
+  function inPanel(el) {
+    return !!(el && el.closest && el.closest('.panel'));
+  }
+
+  /* ---- 识别宿主：只认「真正装内容」的节点，滑块声明节点跳过 ---- */
+  function collect(rootEl, out) {
+    function seen(el) {
+      for (var i = 0; i < out.length; i++) if (out[i].el === el) return true;
+      return false;
+    }
+    function kindOf(el) {
+      return el.classList.contains('js-plotly-plot') ? 'plotly'
+        : (el.classList.contains('datatables') ? 'dt' : 'generic');
+    }
+    function push(el, kind) {
+      if (seen(el) || inPanel(el)) return;
+      out.push({ el: el, kind: kind, cell: el.closest ? el.closest('.cell') : null });
+    }
+
+    if (rootEl.classList && rootEl.classList.contains('html-widget')) push(rootEl, kindOf(rootEl));
+    Array.prototype.forEach.call(rootEl.querySelectorAll('.html-widget'), function (el) {
+      push(el, kindOf(el));
+    });
+
+    // Python plotly 直接输出 plotly.js 的 div，class 里没有 html-widget
+    Array.prototype.forEach.call(rootEl.querySelectorAll('.js-plotly-plot'), function (el) {
+      push(el, 'plotly');
+    });
+
+    Array.prototype.forEach.call(rootEl.querySelectorAll('[id^="ojs-cell-"]'), function (el) {
+      if (el.getAttribute('data-nodetype') === 'declaration') return;
+      if (!el.querySelector('svg')) return;
+      push(el, 'svg');
+    });
+
+    collectStatic(rootEl, out, seen);
+  }
+
+  /* ---- 静态内容：图片 / 媒体 / 普通表格 / 任意 SVG --------------------------
+     保守识别，宁可漏接管也不要误伤：
+       · 小于 30% 栏宽的图片、200px 以下的 SVG、图题里的图标一律跳过；
+       · MathJax 的 <svg class="math-svg"> 绝不能当图表缩放（双重排除）；
+       · widget 内部、嵌套 .fit 的内容不碰，各管各的。
+     宿主顺序：figure → .cell-output-display → 父元素（p 等）→ 元素自身。 */
+  function collectStatic(scope, out, seen) {
+    var sw = scope.clientWidth || 0;
+    if (!sw) return;
+
+    function ok(el) {
+      if (inPanel(el)) return false;                       // 1.3.0：panel 内媒体走 data-media
+      if (el.getAttribute('data-fit-static') === 'none') return false;
+      if (el.closest('.math-svg, mjx-container, figcaption, .poll, .demo')) return false;
+      if (el.closest('.html-widget')) return false;        // widget 内部已有专门策略
+      var f = el.closest('.fit');
+      if (f && f !== scope) return false;                  // 嵌套 .fit 各管各的
+      return true;
+    }
+    function wide(el) {
+      return el.getBoundingClientRect().width >= sw * 0.3;
+    }
+    function add(host, kind) {
+      if (!host || seen(host) || inPanel(host)) return;
+      host.setAttribute('data-fit-static', kind);
+      out.push({ el: host, kind: kind, cell: host.closest ? host.closest('.cell') : null });
+    }
+
+    Array.prototype.forEach.call(scope.querySelectorAll('img, video, iframe'), function (el) {
+      if (!ok(el) || !wide(el)) return;
+      // 必须优先 .quarto-figure：Quarto 的包裹是 .quarto-figure > figure > p > img，
+      // 只标 figure 的话它外面那层 div 仍是 flex:0 0 auto，图还是自然高度。
+      var host = el.closest('.quarto-figure') || el.closest('figure') ||
+                 el.closest('.cell-output-display') || el.parentElement || el;
+      add(host === scope ? el : host, el.tagName === 'IMG' ? 'img' : 'media');
+    });
+
+    // 普通表格：DT 的 table 已由 fitDT 处理，这里必须排除，否则双重二分
+    Array.prototype.forEach.call(scope.querySelectorAll('table'), function (el) {
+      if (!ok(el) || !wide(el)) return;
+      if (el.closest('.datatables, .dataTables_wrapper')) return;
+      add(el, 'table');
+    });
+
+    Array.prototype.forEach.call(scope.querySelectorAll('svg'), function (el) {
+      if (!ok(el)) return;
+      if (el.closest('[id^="ojs-cell-"]')) return;         // 已由 OJS 分支接管
+      var vb = el.viewBox && el.viewBox.baseVal;
+      if (!vb || !vb.width || !vb.height) return;          // 没 viewBox 无法等比
+      if (el.getBoundingClientRect().width < 200) return;  // 小图标不碰
+      // mermaid 在 reveal 里的结构是 .cell-output-display > div > figure > div > svg，
+      // 只标最近的父层拿不到容器高度（外壳 flex:0 0 auto），必须标到 .cell-output-display。
+      add(el.closest('.cell-output-display') || el.closest('figure') ||
+          (el.parentElement && el.parentElement !== scope ? el.parentElement : el), 'svg');
+    });
+  }
+
+  /* ---- 单页主流程 ---- */
+  function fitSection(sec) {
+    if (!sec || !sec.clientWidth) return;
+    var scopes = scopesOf(sec);
+    if (!scopes.length) return;
+
+    var list = [];
+    scopes.forEach(function (box) { collect(box, list); });
+    if (!list.length) return;
+
+    // 先打标记建立高度链，再强制一次布局
+    list.forEach(function (h) {
+      if (h.cell && !h.cell.hasAttribute('data-fit-host')) {
+        h.cell.setAttribute('data-fit-host', h.kind);
+      }
+    });
+    void sec.offsetHeight;
+
+    list.forEach(function (h) {
+      var w = Math.round(h.el.clientWidth);
+      var ht = Math.round(h.el.clientHeight);
+      if (!w || !ht) return;
+      var key = w + 'x' + ht;
+      // DT / 普通表格的字号二分不幂等；SVG 可能被 mermaid 在渲染后改写 max-width，
+      // 每次都要复核；其余类型尺寸没变就跳过
+      if (h.kind !== 'dt' && h.kind !== 'table' && h.kind !== 'svg' && h.el.__qk === key) return;
+      h.el.__qk = key;
+      try {
+        if (h.kind === 'plotly') fitPlotly(h.el, w, ht);
+        else if (h.kind === 'dt') fitDT(h.el, w, ht);
+        else if (h.kind === 'table') fitTable(h.el, w, ht);
+        else if (h.kind === 'svg') fitSvg(h.el, w, ht);
+        else if (h.kind === 'img' || h.kind === 'media') fitMedia(h.el, w, ht);
+        else fitGeneric(h.el, w, ht);
+      } catch (e) {
+        console.warn('[QFIT] 适配失败：' + h.kind + ' #' + (h.el.id || '?'), e);
+      }
+    });
+
+    if (CFG.debug) {
+      console.debug('[QFIT] ' + (sec.id || '(no id)') + ' → ' + list.map(function (h) {
+        return h.kind + ':' + h.el.clientWidth + '×' + h.el.clientHeight;
+      }).join(', '));
+    }
+  }
+
+  /* ---- plotly ---------------------------------------------------------------
+     不用 Plots.resize：它读 offsetWidth，但 relayout 是异步生效的，隐藏页切过来
+     的第一帧会量到旧值；而且 htmlwidget 在 display:none 的页里初始化时会退化成
+     700×450 的默认尺寸。直接给容器实测的整数像素，最确定。 */
+  function fitPlotly(el, w, h) {
+    if (!window.Plotly || !el.classList.contains('js-plotly-plot')) return;
+    var fl = el._fullLayout;
+    if (!fl || !fl.width || !fl.height) return;          // 还没画完，等下一次触发
+    if (Math.abs(fl.width - w) <= 1 && Math.abs(fl.height - h) <= 1) return;
+    try {
+      Plotly.relayout(el, { width: w, height: h });
+    } catch (e) {
+      if (Plotly.Plots && typeof Plotly.Plots.resize === 'function') Plotly.Plots.resize(el);
+      else throw e;
+    }
+  }
+
+  /* ---- 表格：DT 与普通 markdown 表格共用同一套字号二分 ----------------------
+     不用 scrollY（那本身就是造一个滚动体）。改为把字号二分到能塞下为止，
+     !important 是为了压过 formatStyle(fontSize='12px') 写进 <td> 的内联样式。
+     普通表格没有 id，统一用 data-fit-tid 生成稳定选择器。 */
+  var tseq = 0;
+
+  function fitTable(host, w, h) {
+    var table = (host.tagName && host.tagName.toLowerCase() === 'table')
+      ? host : (host.querySelector('table.dataTable') || host.querySelector('table'));
+    if (!table) { fitGeneric(host, w, h); return; }
+    if (table.style.width) table.style.width = '';        // DataTables 可能写死过
+
+    if (!host.__qTid) {
+      host.__qTid = 't' + (++tseq);
+      host.setAttribute('data-fit-tid', host.__qTid);
+    }
+    var sel = '[data-fit-tid="' + host.__qTid + '"]';
+
+    if (!host.__qStyle) {
+      var st = document.createElement('style');
+      st.setAttribute('data-qfit-for', host.id || host.__qTid);
+      document.head.appendChild(st);
+      host.__qStyle = st;
+    }
+
+    function paint(px) {
+      host.__qStyle.textContent =
+        sel + ' th, ' + sel + ' td{font-size:' + px + 'px !important;' +
+        'padding:6px 8px !important;line-height:1.35 !important;}' +
+        sel + ' th{white-space:normal !important;}' +
+        sel + ' td{white-space:nowrap !important;}';
+      void table.offsetHeight;
+    }
+    function fits() {
+      return table.offsetHeight <= h + 1 && table.offsetWidth <= w + 1;
+    }
+
+    paint(CFG.maxFont);
+    if (fits()) { host.removeAttribute('data-fit-warn'); return; }
+
+    var lo = CFG.minFont, hi = CFG.maxFont;
+    for (var i = 0; i < 7; i++) {
+      var mid = (lo + hi) / 2;
+      paint(mid);
+      if (table.offsetHeight <= h - 1 && table.offsetWidth <= w + 1) lo = mid;
+      else hi = mid;
+    }
+    paint(lo);
+
+    if (fits()) {
+      host.removeAttribute('data-fit-warn');
+    } else {
+      host.setAttribute('data-fit-warn', 'table:' + table.offsetWidth + '×' + table.offsetHeight + '>' + w + '×' + h);
+      console.warn('[QFIT] 表格塞不下：需要 ' + table.offsetWidth + '×' + table.offsetHeight +
+        '，可用 ' + w + '×' + h + '，字号已降到 ' + lo.toFixed(1) + 'px。' +
+        '建议减少列数、缩短表头，或给该页加 data-fit-allow-scroll。');
+    }
+  }
+
+  function fitDT(el, w, h) { fitTable(el, w, h); }
+
+  /* ---- 图片 / iframe / 视频 -------------------------------------------------
+     尺寸完全由 CSS（flex + object-fit:contain）决定，这里只做验收：
+     contain 下不可能变形，剩下的唯一风险是宿主自身溢出。 */
+  function fitMedia(el, w, h) {
+    if (el.scrollHeight > h + 1 || el.scrollWidth > w + 1) {
+      el.setAttribute('data-fit-warn',
+        'media:' + el.scrollWidth + '×' + el.scrollHeight + '>' + w + '×' + h);
+    } else {
+      el.removeAttribute('data-fit-warn');
+    }
+  }
+
+  /* ---- OJS / Observable Plot 的 SVG -----------------------------------------
+     保留 viewBox，删掉 width/height 属性，按 contain 等比缩放：
+     xMidYMid meet 保证完整入框、永不裁切，也不会把文字拉扁。 */
+  function fitSvg(el, w, h) {
+    var svg = (el.tagName && el.tagName.toLowerCase() === 'svg') ? el : el.querySelector('svg');
+    if (!svg) return;
+
+    var vb = svg.viewBox && svg.viewBox.baseVal;
+    var vw = vb && vb.width, vh = vb && vb.height;
+    if (!vw || !vh) {
+      var aw = parseFloat(svg.getAttribute('width')) || svg.clientWidth || 640;
+      var ah = parseFloat(svg.getAttribute('height')) || svg.clientHeight || 340;
+      if (!aw || !ah) return;
+      svg.setAttribute('viewBox', '0 0 ' + aw + ' ' + ah);
+      vw = aw; vh = ah;
+    }
+
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    svg.removeAttribute('width');
+    svg.removeAttribute('height');
+    // mermaid 会写 style="max-width:<自然宽>px"，不清掉的话下面算出的 px 宽会被它压回去
+    svg.style.maxWidth = 'none';
+    svg.style.maxHeight = 'none';
+
+    var s = Math.min(w / vw, h / vh);
+    svg.style.width = Math.round(vw * s) + 'px';
+    svg.style.height = Math.round(vh * s) + 'px';
+
+    if (s < CFG.scaleMin || s > CFG.scaleMax) {
+      console.info('[QFIT] OJS 图缩放 ' + s.toFixed(2) + '×（原始 ' + Math.round(vw) + '×' +
+        Math.round(vh) + ' → 容器 ' + w + '×' + h + '）。' +
+        '若字号看起来偏大或偏小，把 Plot.plot 的 height 调整到约 ' + Math.round(h) + '。');
+    }
+  }
+
+  /* ---- 未知 widget：不猜内部结构，只做容器约束 ---- */
+  function fitGeneric(el, w, h) {
+    el.style.overflow = 'hidden';
+    Array.prototype.forEach.call(el.querySelectorAll('img,canvas,svg,iframe,video'), function (n) {
+      n.style.maxWidth = '100%';
+      n.style.maxHeight = '100%';
+      if (n.tagName === 'IMG' || n.tagName === 'VIDEO') n.style.objectFit = 'contain';
+    });
+    if (el.scrollHeight > h + 1 || el.scrollWidth > w + 1) {
+      el.setAttribute('data-fit-warn', 'generic:' + el.scrollWidth + '×' + el.scrollHeight + '>' + w + '×' + h);
+    } else {
+      el.removeAttribute('data-fit-warn');
+    }
+  }
+
+  /* ---- 调度：双 rAF 避开 reveal 的过渡帧，pending 去重防重入 ---- */
+  function schedule(sec) {
+    if (!sec) return;
+    if (pending.indexOf(sec) < 0) pending.push(sec);
+    if (busy) return;
+    busy = true;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        var list = pending.slice();
+        pending.length = 0;
+        busy = false;
+        list.forEach(fitSection);
+      });
+    });
+  }
+
+  function init() {
+    var sections = (Reveal.getSlides ? Reveal.getSlides() : null) || [];
+    if (!sections.length) return;
+
+    var has = sections.some(function (s) {
+      return (s.classList && s.classList.contains('fit')) || s.querySelector('.fit');
+    });
+    if (!has) return;                       // 无标记 → 完全 no-op
+
+    Reveal.on('slidechanged', function (e) { schedule(e.currentSlide); });
+    Reveal.on('resize', function () { schedule(Reveal.getCurrentSlide()); });
+
+    if (isPrint()) {
+      // print-pdf 下所有 section 都是 display:block，可以一次全量适配
+      sections.forEach(function (s, i) {
+        setTimeout(function () { fitSection(s); }, i * 24);
+      });
+    } else {
+      schedule(Reveal.getCurrentSlide());
+    }
+
+    // OJS 是异步求值的：svg 迟到时补一次（只在注入 svg 的那一刻触发）
+    if (window.MutationObserver) {
+      var mo = new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var t = muts[i].target;
+          if (t && t.nodeType === 1 && t.querySelector && t.querySelector('svg')) {
+            schedule(t.closest ? t.closest('section') : null);
+            return;
+          }
+        }
+      });
+      var slides = document.querySelector('.reveal .slides');
+      if (slides) mo.observe(slides, { childList: true, subtree: true });
+    }
+  }
+
+  /* ---- 对外 API：审计脚本与人共用的诊断出口 ---- */
+  window.QFIT = {
+    version: VERSION,
+    refit: function () { schedule(Reveal.getCurrentSlide()); },
+    // 一次性适配全部页：?print-pdf 与审计脚本用。
+    // 用 DOM 查询而不是 Reveal.getSlides()：打印模式下后者在初始化早期是空数组。
+    fitAll: function () {
+      var secs = document.querySelectorAll('.reveal .slides section');
+      Array.prototype.forEach.call(secs, function (s) {
+        try { fitSection(s); } catch (e) {}
+      });
+    },
+    report: function () {
+      var out = [];
+      (Reveal.getSlides() || []).forEach(function (sec) {
+        var scopes = scopesOf(sec);
+        if (!scopes.length) return;
+        var hosts = [];
+        scopes.forEach(function (box) {
+          var list = [];
+          collect(box, list);
+          list.forEach(function (h) {
+            hosts.push({
+              kind: h.kind,
+              box: { w: h.el.clientWidth, h: h.el.clientHeight },
+              scroll: { w: h.el.scrollWidth, h: h.el.scrollHeight },
+              warn: h.el.getAttribute('data-fit-warn') || null
+            });
+          });
+        });
+        out.push({ id: sec.id || '', hosts: hosts });
+      });
+      return out;
+    }
+  };
+
+  if (Reveal.isReady && Reveal.isReady()) { init(); }
+  else if (Reveal.on) { Reveal.on('ready', init); }
+  else { setTimeout(init, 300); }
+})();
+</script>

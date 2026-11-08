@@ -409,13 +409,136 @@ html.chromeless .slide-number { display: none; }
 .panel .cell[data-split="v3"] > .sub > ul,
 .panel .cell[data-split="v3"] > .sub > ol { margin-top: 0; margin-bottom: 0; }
 
-/* L330 的 150pt 上限在约 89pt 半格不触发；qmd 图片写死内联 height(100~130pt) */
+/* 未写 data-media 时仍走这条 70pt 上限（qmd 图片写死内联 height 100~130pt）；
+   写了 data-media 就交给 H3 段接管，高度由 CSS 算。 */
 .panel .cell[data-split] figure.nwpu-fig img {
   max-height: calc(70 * var(--pt));
   max-width: 100%;
   object-fit: contain;
 }
 /* 刻意不写 figcaption 规则：继续沿用 M 段的 .72em */
+
+/* ---------- H3. 格内媒体（data-media）：让图 / 视频 / 网页吃满格子 ----------
+   H 段把高度定死在 grid 轨道上（4 宫格每轨 187.75pt，cell 内容盒 175.75pt），
+   而 cell 是普通流 + overflow:hidden，所以媒体一超高就【静默裁掉】——不报错、
+   无滚动条、页面看着正常。L355 的 150pt 上限只对 figure.nwpu-fig 生效，
+   Markdown 的 .quarto-figure > figure > p > img 连这条都吃不到。
+   H3 用 flex column 把「剩余高度」显式传下去，末尾 object-fit:contain 装箱：
+   不裁、不拉伸，作者不必再手写 height:calc(130*var(--pt))。
+
+   写法：给 cell 或 sub 加 data-media="img|video|frame"。
+     · 必须带值——Pandoc 把裸词 {data-media} 解析成 class，不是 attribute。
+     · 与 data-split 互斥：一格要么再分（grid）要么放媒体（flex），
+       同时写时由 :not([data-split]) 保证 split 胜出。
+     · 一格一媒体——flex 分的是「剩余高度」，两个媒体只会互相抢。
+
+   高度链（每层都必须 min-height:0，否则 flex 子项默认 min-height:auto 不肯缩，
+   这就是「图撑出格子」的真正原因）：
+     轨道 187.75pt → cell 内容盒 175.75pt（padding 6pt×2）
+     cell[data-media]            flex column
+     └─ figure / .quarto-figure  flex:1 1 auto（含 Quarto 的 figure>p>img 三层）
+        └─ img / video          100% + object-fit:contain
+     figcaption / p / ul / 卡片   flex:0 0 auto（绝不被媒体挤扁）
+   与 fit.css §9 同构：宿主链只分配高度，叶子只负责装满；差别只在高度源
+   （那边是 section 内容盒 1176×557.34，这里是 grid 轨道）。
+   --------------------------------------------------------------- */
+.panel > .cell[data-media]:not([data-split]),
+.panel .cell[data-split] > .sub[data-media] {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  /* padding / background / overflow 沿用 L340、L397 的一级格与子格设定 */
+}
+
+/* 1) 文字类子元素保持自然高度。必须先写：宿主规则靠更高特异性把 figure>p 抢回来。
+      注意这里要拆成两条——:is() 的特异性取参数里的最大值，
+      若把 .card-title 混进元素列表，整条选择器会升到 (0,3,0)，
+      把下面 (0,2,2) 的宿主规则的 flex:1 1 auto 顶掉（实测：p 停在 0 0 auto，格内溢出 42px）。 */
+.panel [data-media] > :is(p, ul, ol, h3, h4, blockquote, figcaption) {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.panel [data-media] > .card-title {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+/* 2) 媒体宿主：把剩余高度一路传下去。
+      display:flex 顺带消掉行盒 strut，所以不必写 line-height:0——写了会被
+      figcaption 继承，图题反而挤成一条线。
+      选择器里显式带 .nwpu-fig / 层级，是为了压过 L518 的
+      .reveal figure.nwpu-fig { margin:.35em 0 }（(0,2,1)）。 */
+.panel [data-media] > figure,
+.panel [data-media] > figure.nwpu-fig,
+.panel [data-media] > .quarto-figure,
+.panel [data-media] > .cell-output-display,
+.panel [data-media] > figure > p,
+.panel [data-media] > .quarto-figure > figure,
+.panel [data-media] > .quarto-figure > figure > p,
+.panel [data-media] > :is(p, div):has(> img, > video, > iframe) {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;                    /* 盖 L85 的 .35em、L353 的 .12em、L518 的 .35em */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 3) 叶子：contain 装箱，永不裁切、永不拉伸。
+      两处 !important 各有明确对手，不是「保险」：
+        max-height ← L355 .panel .cell figure.nwpu-fig img{max-height:150pt}
+        width/height ← 旧页写在 img 上的 style="height:calc(130*var(--pt))"
+      写了 data-media 就等于声明「高度归 CSS」，所以覆盖是契约的一部分。 */
+.panel [data-media] :is(img, video) {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100% !important;
+  object-fit: contain;
+  object-position: center;
+  background: transparent;
+}
+
+/* 4) iframe 是独立浏览上下文：Chrome 不按 object-fit 缩放其内容
+      （盒子变了，嵌套文档按自己的 viewport 重排）。所以这里不承诺 contain，
+      只承诺「盒子不出界 + 比例可控」：宽 100%，高由 aspect-ratio 换算，
+      max-height 兜住「算出来比格子高」的情况；内部该出滚动条还是出。
+      --media-ar 是作者侧旋钮，如 style="--media-ar:4/3"。 */
+.panel [data-media="frame"] { --media-ar: 16 / 9; }
+.panel [data-media="frame"] iframe {
+  display: block;
+  flex: 0 1 auto;
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: var(--media-ar);
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;                 /* 上下居中：多出的白留在格内，不压图题 */
+  border: 0;
+  background: #fff;
+}
+
+/* 5) 图题不参与伸缩——长图题把图挤扁是「图怎么变小了」的头号病因 */
+.panel [data-media] figcaption {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+/* 6) 表格不适用 data-media：table 只能 display:table，被 flex 接管会毁掉
+      行列布局。这里只兜宽度，高度仍由行数决定——超了就是超了，请减行。 */
+.panel [data-media] table {
+  flex: 0 0 auto;
+  display: table;
+  align-self: center;
+  max-width: 100%;
+}
 
 /* ---------- I. 五类卡片 ---------- */
 .quiz, .defbox, .pitfall, .poll, .demo {

@@ -47,6 +47,7 @@
 | 图与自动图号 | `<figure class="nwpu-fig">` + `<figcaption>` |
 | panel 分格 | `::::: {.panel data-mode="4" style="--px:50%;--py:50%"}` → `:::: {.cell data-area="a"}` |
 | 格内细分 | `data-split="v|h|v3|h3"` + `::: {.sub}`，子格数必须等于轨道数（`v/h` → 2，`v3/h3` → 3） |
+| 格内放图 / 视频 / 网页 | `data-media="img"` / `"video"` / `"frame"`（写在 `:::: {.cell …}` 或 `::: {.sub …}` 上），媒体吃满格子剩余高度，不写 `width`/`height` |
 | 讲者备注 | `::: {.notes}` |
 | fragment | `. . .` 或 `::: {.fragment}` |
 
@@ -65,6 +66,10 @@ brand-header: "某某单位 · 课程名"
 ## 容易踩的坑
 
 - **不要在 panel 内套 `::: {.columns}`**，三层 `overflow:hidden` 会静默裁掉内容。
+- **`data-media` 必须带值**：裸词 `{data-media}` 会被 Pandoc 当成 class，写了不报错但不生效。
+- **不要在同一格同时写 `data-split` 与 `data-media`**：一格要么再分、要么放媒体，同时写时 split 胜出。
+- **不要给格内媒体手写 `height`**：`data-media` 会用 `!important` 覆盖，写了也白写。
+- **不要把 plotly / DT / OJS 放进格子**：它们按自身默认尺寸渲染，必被裁；要交互就把 panel 拆掉、整页用 `.fit`。
 - **不要改 `.reveal .slides section` 的 `position:absolute`**，会推出空白页。
 - 图号是 CSS 计数器，reveal 只渲染当前页时同章可能显示重复编号；正文里不要写「见图 N」。
 - 中文破折号 `——` 会被 Pandoc 转成 `---` 而意外分页，正文请用「：」或「，」代替。

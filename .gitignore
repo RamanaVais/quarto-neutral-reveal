@@ -4,8 +4,14 @@
 /*_files/
 /.quarto/
 
+# examples/ 的渲染产物（渲染 examples/lecture.qmd 时生成）
+/examples/*.html
+/examples/*_files/
+
 # 编辑器 / 系统
 .DS_Store
 Thumbs.db
 
 /.luarc.json
+
+**/*.quarto_ipynb

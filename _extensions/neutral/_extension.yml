@@ -1,6 +1,6 @@
 title: Neutral Reveal
 author: 冯老师
-version: 1.0.1
+version: 1.3.0
 quarto-required: ">=1.8.0"
 contributes:
   format:
@@ -24,7 +24,14 @@ contributes:
       pdf-max-pages-per-slide: 1
       menu: true
       chalkboard: false
-      css: neutral.css
+      # 数组顺序就是注入顺序：neutral.css 定版式基线，fit.css 只做交互适配，
+      # 同特异性冲突时后者胜。include-after-body 里 chrome.html 必须先跑
+      # （它给 section 打 is-content 分类），fit.html 再挂自适应。
+      css:
+        - neutral.css
+        - fit.css
       template-partials: [title-slide.html]
-      include-after-body: chrome.html
-      filters: [part-contract.lua, brand-header.lua]
+      include-after-body:
+        - chrome.html
+        - fit.html
+      filters: [part-contract.lua, brand-header.lua, fit-options.lua]

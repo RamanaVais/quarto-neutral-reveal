@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>格内网页演示</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    background: #eef2f8;
+    color: #0f3d7e;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px; padding: 12px; box-sizing: border-box;
+    text-align: center;
+  }
+  h1 { font-size: 15px; margin: 0; letter-spacing: .04em; }
+  .clock { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; color: #20242a; }
+  .hint { font-size: 11px; color: #5b6672; line-height: 1.5; }
+  button {
+    font: inherit; font-size: 12px; padding: 5px 14px;
+    border: 1px solid #0f3d7e; border-radius: 4px;
+    background: #fff; color: #0f3d7e; cursor: pointer;
+  }
+  button:active { background: #0f3d7e; color: #fff; }
+  .count { font-size: 12px; color: #c8a45d; font-weight: 600; }
+</style>
+</head>
+<body>
+  <h1>这是一个真实的 HTML 页面</h1>
+  <div class="clock" id="clock">--:--:--</div>
+  <div class="hint">iframe 里的一切都是活的：时钟在走、按钮能点。<br>但它按自己的 viewport 排版，不会跟着格子缩放。</div>
+  <button id="btn">点我</button>
+  <div class="count">已点击 <span id="n">0</span> 次</div>
+<script>
+  var n = 0;
+  document.getElementById('btn').addEventListener('click', function () {
+    document.getElementById('n').textContent = ++n;
+  });
+  function tick() {
+    var d = new Date();
+    var p = function (v) { return (v < 10 ? '0' : '') + v; };
+    document.getElementById('clock').textContent =
+      p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+  tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>

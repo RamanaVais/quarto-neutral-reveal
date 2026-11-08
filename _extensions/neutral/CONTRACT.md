@@ -32,6 +32,7 @@
 | `.is-part > h1 { display:none }` | G | H1 被隐藏，但它承载 `{#sec-NN}` 锚点并触发 reveal 新建 horizontal stack，**不能删** |
 | `.panel` / `.cell[data-area]` / `data-mode="4,3t,3b,3l,3r"` | H | CSS Grid 真实分格，`gap` 透出底色即分格线 |
 | `.cell[data-split]` / `.sub` / `--sx/--sy/--sx2/--sy2` | H2 | 格内二级细分；`.sub` 数必须等于轨道数 |
+| `data-media="img\|video\|frame"`（`.cell` / `.sub`） | H3 | 格内自适应媒体：容器变 flex 列，媒体吃满剩余高度 + `object-fit:contain`；与 `data-split` 互斥（split 胜出）、与 `.fit` 互斥；**必须带值**——Pandoc 把裸词 `{data-media}` 解析成 class 而非 attribute |
 | `figure.nwpu-fig` / `figcaption` / `counter(fig)` | M | 图号计数器挂在 `.reveal .slides`；增减 `<figure>` 会整体位移编号 |
 | `html.print-pdf` 与 `@media print` | N | Quarto `?print-pdf` 注入的类，用于展开 fragment、隐藏导航 |
 | `--nwpu-*` 变量别名 | A | 中性主令牌是 `--brand-*`，别名保留以防旧内联样式断裂 |
