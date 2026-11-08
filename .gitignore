@@ -1,0 +1,9 @@
+# 根目录的渲染产物（注意：_extensions/ 里的 .html partial 是源码，不能忽略）
+/*.html
+/*.pdf
+/*_files/
+/.quarto/
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db

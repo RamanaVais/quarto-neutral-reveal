@@ -1,0 +1,562 @@
+/* ============================================================
+   Neutral Reveal —— 中性可配置的 Quarto reveal.js 格式扩展
+   版式几何沿用 Typst 设计稿 842 x 473pt -> reveal 画布 1280 x 720
+   ------------------------------------------------------------
+   对外可配置项集中在 :root 的 --brand-* 令牌与 --brand-logo；
+   封面文案走 Pandoc 变量（$author$ / $institute$ / $brand-* $）。
+   内部类名（.nwpu-* / .nc-* / .cv-*）是稳定契约，见 CONTRACT.md。
+   几何令牌 --pt 绑定 1280x720，改动会重做版式，请勿随意调整。
+   ============================================================ */
+
+/* ---------- A. 设计令牌 / reset ---------- */
+:root {
+  /* 1pt = 1280 / 842 px；所有绝对几何按 pt 原样换算 */
+  --pt: 1.5202px;
+  --slide-w: calc(842 * var(--pt));
+  --slide-h: calc(473 * var(--pt));
+  --pad-x: calc(34.2 * var(--pt));
+  --y-rule: calc(34.2 * var(--pt));
+  --y-body: calc(47 * var(--pt));
+  --y-gold: calc(445.47 * var(--pt));
+  --panel-w: calc(773.5 * var(--pt));
+  --panel-h: calc(380 * var(--pt));
+  --fs-base: calc(18 * var(--pt));
+
+  /* 品牌主令牌：改这里即可整体换色（也可用 include-in-header 注入覆盖） */
+  --brand-primary: #0F3D7E;
+  --brand-accent: #C8A45D;
+  --brand-accent-soft: #DECBA0;
+  --brand-primary-light: #EEF2F8;
+  --brand-primary-pale: #EDF3FA;
+  --brand-accent-light: #FBF6EA;
+  --brand-ink: #20242a;
+  --brand-logo: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxNDAgMjcnPjxjaXJjbGUgY3g9JzEzLjUnIGN5PScxMy41JyByPScxMicgZmlsbD0nIzBGM0Q3RScvPjxjaXJjbGUgY3g9JzEzLjUnIGN5PScxMy41JyByPSc4LjQnIGZpbGw9J25vbmUnIHN0cm9rZT0nI0M4QTQ1RCcgc3Ryb2tlLXdpZHRoPScxLjInLz48cGF0aCBkPSdNOS4yIDE4IEwxMy41IDguNCBMMTcuOCAxOCcgZmlsbD0nbm9uZScgc3Ryb2tlPScjQzhBNDVEJyBzdHJva2Utd2lkdGg9JzEuNycgc3Ryb2tlLWxpbmVjYXA9J3JvdW5kJyBzdHJva2UtbGluZWpvaW49J3JvdW5kJy8+PHJlY3QgeD0nMzInIHk9JzYuNScgd2lkdGg9JzEwMCcgaGVpZ2h0PSc0LjInIHJ4PScyLjEnIGZpbGw9JyMwRjNEN0UnLz48cmVjdCB4PSczMicgeT0nMTUnIHdpZHRoPSc2OCcgaGVpZ2h0PSczJyByeD0nMS41JyBmaWxsPScjQzhBNDVEJy8+PC9zdmc+");
+  --fig-label: "图 ";
+
+  /* 兼容别名：内部稳定契约，勿删（见 CONTRACT.md） */
+  --nwpu-blue: var(--brand-primary);
+  --nwpu-gold: var(--brand-accent);
+  --nwpu-gold-soft: var(--brand-accent-soft);
+  --nwpu-blue-light: var(--brand-primary-light);
+  --nwpu-blue-pale: var(--brand-primary-pale);
+  --nwpu-gold-light: var(--brand-accent-light);
+  --nwpu-ink: var(--brand-ink);
+  --card-stroke: #C9D3E2;
+  --demo-bg: #1B1F27;
+  --demo-fg: #E6EAF2;
+
+  --font-body: "Times New Roman", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", serif;
+  --font-mono: "DejaVu Sans Mono", "Consolas", "Microsoft YaHei", monospace;
+}
+
+.reveal {
+  font-family: var(--font-body);
+  font-size: var(--fs-base);       /* 1em ≡ Typst 18pt */
+  color: var(--nwpu-ink);
+  background: #fff;
+}
+.reveal *, .reveal *::before, .reveal *::after { box-sizing: border-box; }
+
+.reveal .slides section {
+  /* 必须保持 reveal 原生的 position:absolute；改成 relative 会让所有页
+     进入正常文档流堆叠，当前页被推到视口外（曾导致空白页）。 */
+  position: absolute;
+  height: 100%;
+  padding: var(--y-body) var(--pad-x) calc(60 * var(--pt));
+  margin: 0;
+  text-align: left;
+}
+.reveal .slides > section,
+.reveal .slides > section > section { text-align: left; }
+
+/* ---------- B. 全局排版 ---------- */
+.reveal h1, .reveal h2, .reveal h3 { font-family: var(--font-body); margin: 0; text-transform: none; }
+.reveal .slides section > h2 {
+  color: var(--nwpu-blue);
+  font-size: 1em;
+  font-weight: bold;
+  text-align: left;
+  border: 0;
+  margin: 0 0 .5em 0;
+  letter-spacing: 0;
+}
+.reveal h3 { color: var(--nwpu-blue); font-size: .85em; font-weight: bold; }
+.reveal p, .reveal li, .reveal td, .reveal th { font-size: 1em; line-height: 1.34; }
+.reveal p { margin: .35em 0; }
+.reveal ul, .reveal ol { margin: .35em 0 .35em 1.2em; }
+.reveal li { margin: .18em 0; }
+.reveal strong { color: var(--nwpu-blue); font-weight: bold; }
+.reveal a { color: var(--nwpu-blue); text-decoration: none; }
+.reveal a:hover { text-decoration: underline; }
+.reveal img { border: 0; box-shadow: none; background: transparent; }
+.reveal .slides section.is-content > h2 { display: none; }  /* 标题移到页眉 */
+.reveal .slides section.is-content > h3:first-of-type { margin-top: 0; }
+
+/* ---------- C. 每页页眉：标题 | 圆点导航 | 校徽 + 贯穿蓝线 ---------- */
+.reveal .nwpu-chrome {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: var(--y-rule);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: end;
+  column-gap: calc(12 * var(--pt));
+  padding: 0 var(--pad-x) calc(3 * var(--pt));
+  pointer-events: none;
+  z-index: 5;
+}
+.reveal .nwpu-chrome::after {
+  content: "";
+  position: absolute;
+  left: var(--pad-x); right: var(--pad-x);
+  top: var(--y-rule);
+  height: calc(1.5 * var(--pt));
+  background: var(--nwpu-blue);
+}
+.nc-title {
+  font-size: 1em; font-weight: bold; color: var(--nwpu-blue);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: calc(230 * var(--pt));
+  line-height: 1.1;
+}
+.nc-nav {
+  display: flex; justify-content: center; align-items: flex-end;
+  gap: calc(18 * var(--pt));
+  pointer-events: auto;
+}
+.nc-chap {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: .42em; line-height: 1.1; color: var(--nwpu-blue);
+  opacity: .48; white-space: nowrap; cursor: pointer;
+}
+.nc-chap.is-on { opacity: 1; }
+.nc-chap.is-on b { font-weight: 700; }
+.nc-chap b { font-weight: 500; }
+.nc-dots { display: flex; gap: 3px; }
+.nc-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  border: 1px solid var(--nwpu-blue); background: transparent;
+  cursor: pointer;
+}
+.nc-dot.is-on { background: var(--nwpu-blue); }
+.nc-logo {
+  display: block;
+  width: calc(87 * var(--pt)); height: calc(17 * var(--pt));
+  background: var(--brand-logo) no-repeat right center / contain;
+}
+/* 可选页眉固定文字：只在配置了 brand-header 时由 chrome.html 输出该节点 */
+.nc-right {
+  display: flex; align-items: center;
+  gap: calc(8 * var(--pt));
+}
+.nc-brand {
+  font-style: normal; font-size: .42em; line-height: 1.1;
+  color: var(--nwpu-blue); opacity: .8; white-space: nowrap;
+}
+
+/* ---------- D. 页脚：金色细线 + N / TOTAL ---------- */
+.reveal .slides section::after {
+  content: "";
+  position: absolute;
+  left: var(--pad-x); right: var(--pad-x);
+  top: var(--y-gold);
+  border-top: calc(.7 * var(--pt)) solid var(--nwpu-gold-soft);
+  z-index: 1;
+}
+.reveal .slides section.is-cover::after,
+.reveal .slides section.is-outline::after,
+.reveal .slides section.is-part::after { display: none; }
+
+.reveal .slide-number {
+  color: var(--nwpu-blue);
+  font-family: var(--font-body);
+  font-size: .62em;
+  font-weight: 600;
+  background: transparent;
+  right: var(--pad-x);
+  bottom: calc(8 * var(--pt));
+  padding: 0;
+}
+html.cover .slide-number,
+html.chromeless .slide-number { display: none; }
+
+/* ---------- E. 封面（title-slide.html） ---------- */
+.reveal .slides section#title-slide {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #fff;
+}
+.reveal .slides section#title-slide > h1,
+.reveal .slides section#title-slide > p { display: none; }
+.cv-rings { position: absolute; right: calc(38 * var(--pt)); top: calc(-52 * var(--pt)); z-index: 0; }
+.cv-rings::before, .cv-rings::after {
+  content: ""; display: block; border-radius: 50%; position: absolute; right: 0; top: 0;
+}
+.cv-rings::before {
+  width: calc(130.4 * var(--pt)); height: calc(130.4 * var(--pt));
+  border: calc(1.1 * var(--pt)) solid #E4D0A6;
+  transform: translate(0, 0);
+}
+.cv-rings::after {
+  width: calc(87.8 * var(--pt)); height: calc(87.8 * var(--pt));
+  border: calc(.8 * var(--pt)) solid #EDE0C6;
+  transform: translate(calc(21.3 * var(--pt)), calc(21.3 * var(--pt)));
+}
+.cv-logo {
+  position: absolute; right: calc(34 * var(--pt)); top: calc(9 * var(--pt));
+  width: calc(140 * var(--pt)); height: calc(27 * var(--pt));
+  background: var(--brand-logo) no-repeat right center / contain;
+  z-index: 2;
+}
+.cv-body {
+  position: relative; z-index: 1;
+  padding: calc(78 * var(--pt)) calc(50 * var(--pt)) 0;
+  text-align: center;
+  line-height: 1.4;
+}
+.cv-tag {
+  font-size: .85em; font-weight: 600; letter-spacing: .12em;
+  color: #A6843E; margin: 0 0 1.1em 0;
+}
+.reveal .cv-title {
+  font-size: 1.6em; font-weight: bold; color: var(--nwpu-blue);
+  margin: 0; line-height: 1.25;
+}
+.reveal .cv-sub {
+  font-size: 1.05em; color: #575B61; margin: .4em 0 0 0;
+}
+.cv-rule {
+  width: 38%; height: calc(1.3 * var(--pt));
+  background: var(--nwpu-gold); margin: .9em auto 1.3em;
+}
+.cv-meta { font-size: 1em; color: var(--nwpu-ink); }
+.cv-meta .row { display: flex; justify-content: center; gap: .7em; margin: .2em 0; }
+.cv-meta .row b { color: var(--nwpu-blue); font-weight: bold; }
+.cv-band {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: calc(54 * var(--pt));
+  border-top: calc(1.4 * var(--pt)) solid var(--nwpu-gold);
+  background: var(--nwpu-blue);
+  color: #fff;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 calc(45 * var(--pt));
+  font-size: .8em;
+  z-index: 2;
+}
+
+/* ---------- F. 提纲页 ---------- */
+.reveal .slides section.is-outline > h2 {
+  display: block; font-size: 1.5em; color: var(--nwpu-blue); font-weight: bold;
+  border: 0; margin: 0 0 1.1em 0; padding-left: .5em;
+  position: relative;
+}
+.reveal .slides section.is-outline > h2::before {
+  content: ""; position: absolute; left: 0; top: .1em;
+  width: .42em; height: 1.45em; background: var(--nwpu-gold);
+}
+.nwpu-outline ol { list-style: none; margin: 0; counter-reset: o; }
+.nwpu-outline li {
+  counter-increment: o;
+  display: flex; align-items: center; gap: 1em;
+  font-size: .92em; margin: .34em 0; color: #111;
+}
+.nwpu-outline li::before {
+  content: counter(o, decimal-leading-zero);
+  flex: 0 0 1.65em; height: 1.65em;
+  background: var(--nwpu-blue); color: #fff;
+  border-radius: .28em;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .82em; font-weight: bold;
+}
+.nwpu-outline li a { color: #111; font-weight: 500; }
+
+/* ---------- G. PART 分节页 ---------- */
+.reveal .slides section.is-part > h1 { display: none; }
+.part-meta { display: none; }
+.nwpu-part { position: relative; z-index: 1; }
+.part-watermark {
+  position: absolute; left: calc(12 * var(--pt)); top: 8%;
+  font-size: 13em; font-weight: bold; line-height: 1;
+  color: var(--nwpu-blue-pale); z-index: 0; pointer-events: none;
+}
+.part-label {
+  position: relative; z-index: 1;
+  font-size: .85em; font-weight: 600; letter-spacing: .18em;
+  color: #AD8C41; margin-bottom: .5em;
+}
+.part-title {
+  position: relative; z-index: 1;
+  font-size: 1.9em; font-weight: bold; color: var(--nwpu-blue);
+  margin-bottom: .75em;
+}
+.part-rule { width: 4.5em; height: calc(2 * var(--pt)); background: var(--nwpu-gold); margin-bottom: 1.7em; }
+.part-pills { display: flex; flex-wrap: wrap; gap: .55em; position: relative; z-index: 1; font-size: .62em; }
+.part-pills .pill {
+  padding: .36em .7em; border-radius: 1em;
+  background: var(--nwpu-blue-pale); color: #8A8F98;
+}
+.part-pills .pill.is-on { background: var(--nwpu-blue); color: #fff; }
+
+/* ---------- H. 田字格 / 三格 panel（CSS Grid 真实分格） ----------
+   分格线不再用绝对定位伪元素绘制，而是由 grid 的 gap 透出蓝色底色生成：
+   线永远与格子边界重合，不会切进文字或表格。
+   外框四边与内部分格线统一 1.5pt（与页眉蓝线同粗）；顶边闭合、四角 4pt 圆角；
+   白色格子由父级 overflow:hidden 裁成圆角，内部十字分格线保持直角。
+   --px / --py 直接作为第一列 / 第一行的轨道尺寸，语义与 Typst 的 x / y 一致。 */
+.panel {
+  --px: 50%;
+  --py: 50%;
+  --panel-stroke: calc(1.5 * var(--pt));  /* 外框 + 分格线共用线宽 */
+  display: grid;
+  gap: var(--panel-stroke);
+  width: 100%;
+  height: var(--panel-h);                 /* 固定 380pt 画布，对齐 Typst GRID-H */
+  margin: .15em 0;
+  padding: 0;
+  box-sizing: border-box;                 /* 边框计入固定高度，不挤压页脚金线 */
+  border: var(--panel-stroke) solid var(--nwpu-blue);  /* 四边闭合，顶边不再省略 */
+  border-radius: calc(4 * var(--pt));     /* 主题标准圆角，与 .quiz/.defbox/... 一致 */
+  background: var(--nwpu-blue);           /* gap 透出的蓝色即分格线 */
+  overflow: hidden;                       /* 必需：把子格裁进圆角 */
+}
+.panel[data-mode="4"],
+.panel[data-mode="3t"],
+.panel[data-mode="3b"],
+.panel[data-mode="3l"],
+.panel[data-mode="3r"] {
+  grid-template-columns: var(--px) minmax(0, 1fr);
+  grid-template-rows: var(--py) minmax(0, 1fr);
+}
+/* 通栏格跨两轨时会自动盖住该处的 gap，正好得到 3t/3b/3l/3r 的半截线 */
+.panel[data-mode="4"]  { grid-template-areas: "a b" "c d"; }
+.panel[data-mode="3t"] { grid-template-areas: "b c" "a a"; }
+.panel[data-mode="3b"] { grid-template-areas: "a a" "b c"; }
+.panel[data-mode="3l"] { grid-template-areas: "a b" "a c"; }
+.panel[data-mode="3r"] { grid-template-areas: "b a" "c a"; }
+
+.panel > .cell {
+  min-width: 0; min-height: 0;
+  padding: calc(6 * var(--pt)) calc(9 * var(--pt));
+  box-sizing: border-box;
+  background: #fff;
+  font-size: .9em;
+  overflow: hidden;
+}
+.panel > .cell[data-area="a"] { grid-area: a; }
+.panel > .cell[data-area="b"] { grid-area: b; }
+.panel > .cell[data-area="c"] { grid-area: c; }
+.panel > .cell[data-area="d"] { grid-area: d; }
+.panel > .cell:not([data-area]) { grid-area: auto; }
+
+.panel .cell > :first-child { margin-top: 0; }
+.panel .cell p, .panel .cell li { font-size: .92em; line-height: 1.26; margin: .12em 0; }
+.panel .cell ul, .panel .cell ol { margin: .2em 0 .2em 1em; }
+.panel .cell figure.nwpu-fig img { max-height: calc(150 * var(--pt)); }
+.panel .cell figcaption { font-size: .68em; margin-top: calc(4 * var(--pt)); }
+
+/* ---------- H2. 格子内二级细分（data-split） ----------
+   与一级同构：cell 变 grid，gap 透出 --panel-stroke 蓝色即分格线，
+   与一级外框 / 十字线同色同粗（1.5pt），纯 CSS 无 JS。
+   v = 画【竖】线 → 左右两块 → grid-template-columns（列）；
+   h = 画【横】线 → 上下两块 → grid-template-rows（行）。
+   方向由 data-split 编码（v/h/v3/h3），比例走 style 自定义属性
+   --sx / --sy / --sx2 / --sy2；var() 回退值用 minmax(0,1fr) 让默认精确等分
+   （百分比轨道不吃 gap 会有约一条线的误差），内联 style 天然覆盖回退值。
+   选择器统一 .panel .cell[data-split] (0,3,0)，稳定压过 L313 的 .panel > .cell (0,2,0)。
+   圆角仍由一级 .panel 的 overflow:hidden 统一裁切，.sub 保持直角、不设单独圆角。
+   递归扩展点：将来若允许子格再分，照此结构新增 .sub[data-split] 即可。 */
+.panel .cell[data-split] {
+  display: grid;
+  gap: var(--panel-stroke);
+  padding: 0;                        /* 覆盖 L315：线改由 gap，cell 自身不留白 */
+  background: var(--nwpu-blue);      /* 覆盖 L317：gap 透出的蓝即分割线 */
+  grid-auto-rows: minmax(0, 1fr);
+  grid-auto-columns: minmax(0, 1fr);
+  /* 不覆盖 font-size：保留 L318 的 .9em，避免层层相乘 */
+}
+/* 显式声明另一轴为单轨，消除隐式轨道歧义 */
+.panel .cell[data-split="v"],
+.panel .cell[data-split="v3"] { grid-template-rows: minmax(0, 1fr); }
+.panel .cell[data-split="h"],
+.panel .cell[data-split="h3"] { grid-template-columns: minmax(0, 1fr); }
+
+.panel .cell[data-split="v"]  { grid-template-columns: var(--sx, minmax(0, 1fr)) minmax(0, 1fr); }
+.panel .cell[data-split="h"]  { grid-template-rows: var(--sy, minmax(0, 1fr)) minmax(0, 1fr); }
+.panel .cell[data-split="v3"] {
+  grid-template-columns: var(--sx, minmax(0, 1fr)) var(--sx2, minmax(0, 1fr)) minmax(0, 1fr);
+}
+.panel .cell[data-split="h3"] {
+  grid-template-rows: var(--sy, minmax(0, 1fr)) var(--sy2, minmax(0, 1fr)) minmax(0, 1fr);
+}
+
+/* 子格：自己补回被上面覆盖的一级格白底 + padding */
+.panel .cell[data-split] > .sub {
+  min-width: 0; min-height: 0;
+  box-sizing: border-box;
+  padding: calc(6 * var(--pt)) calc(9 * var(--pt));   /* 与 L315 一致 */
+  background: #fff;                                    /* 与 L317 一致 */
+  overflow: hidden;                                    /* 裁切放在子格 */
+  /* 绝不设 font-size；不设 border-radius */
+}
+/* L327 在 cell 变 grid 后 first-child 变成 .sub 本身，把清零下移 */
+.panel .cell[data-split] > .sub > :first-child { margin-top: 0; }
+/* 三格每轨较矮，收紧「标题+列表」的段间留白，避免首格末尾被裁 */
+.panel .cell[data-split="h3"] > .sub > p,
+.panel .cell[data-split="v3"] > .sub > p { margin-bottom: 0; }
+.panel .cell[data-split="h3"] > .sub > ul,
+.panel .cell[data-split="h3"] > .sub > ol,
+.panel .cell[data-split="v3"] > .sub > ul,
+.panel .cell[data-split="v3"] > .sub > ol { margin-top: 0; margin-bottom: 0; }
+
+/* L330 的 150pt 上限在约 89pt 半格不触发；qmd 图片写死内联 height(100~130pt) */
+.panel .cell[data-split] figure.nwpu-fig img {
+  max-height: calc(70 * var(--pt));
+  max-width: 100%;
+  object-fit: contain;
+}
+/* 刻意不写 figcaption 规则：继续沿用 M 段的 .72em */
+
+/* ---------- I. 五类卡片 ---------- */
+.quiz, .defbox, .pitfall, .poll, .demo {
+  border-radius: calc(4 * var(--pt));
+  padding: calc(10 * var(--pt)) calc(14 * var(--pt));
+  margin: .3em 0;
+  text-align: left;
+  font-size: .92em;
+}
+.quiz {
+  border: calc(1 * var(--pt)) solid var(--nwpu-blue);
+  background: #fff;
+}
+.quiz .q-tag {
+  display: inline-block;
+  background: var(--nwpu-blue); color: #fff;
+  font-size: .78em; font-weight: bold;
+  padding: .1em .6em; border-radius: calc(3 * var(--pt));
+  margin-bottom: .4em;
+}
+.quiz .q-hint { font-size: .68em; color: #6B7280; display: block; margin-top: .5em; }
+.defbox {
+  background: var(--nwpu-blue-light);
+  border-left: calc(4 * var(--pt)) solid var(--nwpu-blue);
+  border-top: calc(.6 * var(--pt)) solid var(--card-stroke);
+  border-right: calc(.6 * var(--pt)) solid var(--card-stroke);
+  border-bottom: calc(.6 * var(--pt)) solid var(--card-stroke);
+}
+.pitfall {
+  background: var(--nwpu-gold-light);
+  border-left: calc(4 * var(--pt)) solid #A6843E;
+  border-top: calc(.6 * var(--pt)) solid var(--card-stroke);
+  border-right: calc(.6 * var(--pt)) solid var(--card-stroke);
+  border-bottom: calc(.6 * var(--pt)) solid var(--card-stroke);
+}
+.card-title { display: block; font-weight: bold; margin-bottom: .35em; }
+.defbox .card-title { color: var(--nwpu-blue); }
+.pitfall .card-title { color: #8A6A25; }
+.poll, .demo {
+  display: grid; grid-template-columns: 1fr auto;
+  gap: .8em; align-items: center;
+  border: calc(1 * var(--pt)) solid var(--nwpu-blue);
+}
+.poll img, .demo img {
+  height: calc(88 * var(--pt)); width: auto;
+  background: #fff; padding: calc(3 * var(--pt)); border-radius: calc(2 * var(--pt));
+}
+.demo {
+  background: var(--demo-bg); color: var(--demo-fg); border: none;
+}
+.demo strong { color: #fff; }
+.demo .card-body { min-width: 0; }
+.demo .card-body p, .poll .card-body { color: var(--demo-fg); }
+.poll .card-body { min-width: 0; color: inherit; }
+.reveal .demo :not(pre) > code {
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, .10);
+  color: #D7E3F4;
+}
+.demo .card-title { color: #fff; }
+
+/* ---------- J. 代码：块 .52em / 行内 .86em ---------- */
+.reveal pre {
+  background: #F2F4F7; border-radius: calc(4 * var(--pt));
+  padding: .45em .6em; margin: .35em 0;
+  border: calc(.6 * var(--pt)) solid var(--card-stroke);
+  box-shadow: none; width: 100%;
+}
+.reveal pre code {
+  font-family: var(--font-mono);
+  font-size: .52em; line-height: 1.25;
+  background: transparent; padding: 0; color: #23272E;
+}
+.reveal :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: .86em;
+  background: var(--nwpu-blue-light);
+  color: var(--nwpu-blue);
+  padding: 0 .2em; border-radius: calc(2 * var(--pt));
+}
+
+/* ---------- K. 表格 ---------- */
+.reveal table { font-size: .72em; border-collapse: collapse; width: 100%; margin: .4em 0; }
+.reveal table th {
+  background: var(--nwpu-blue); color: #fff; font-weight: 600;
+  padding: .35em .6em; border: 1px solid var(--card-stroke); text-align: left;
+}
+.reveal table td { padding: .3em .6em; border: 1px solid var(--card-stroke); }
+.reveal table tbody tr:nth-child(even) { background: var(--nwpu-blue-light); }
+
+/* ---------- L. 公式（构建期 MathML / SVG） ---------- */
+.reveal math, .reveal .math { font-size: 1em; }
+.reveal math[display="block"] { display: block; margin: .4em 0; text-align: center; }
+.reveal .math-svg { display: inline-block; vertical-align: middle; max-width: 100%; }
+.reveal .math-svg.block { display: block; margin: .5em auto; text-align: center; }
+.reveal img.math-svg { background: transparent; }
+
+/* ---------- M. 图题「图 N」 ---------- */
+.reveal .slides { counter-reset: fig 0; }
+.reveal figure.nwpu-fig { margin: .35em 0; text-align: center; }
+.reveal figure.nwpu-fig img { display: block; margin: 0 auto; }
+.reveal figure.nwpu-fig figcaption {
+  font-size: .72em; color: #202020; text-align: center;
+  margin-top: calc(9 * var(--pt)); line-height: 1.3;
+}
+.reveal figure.nwpu-fig figcaption::before,
+.reveal .quarto-figure > figure > figcaption::before {
+  counter-increment: fig;
+  content: var(--fig-label, "图 ") counter(fig) "　";
+  color: var(--nwpu-blue); font-weight: 600;
+}
+/* Markdown 图片被 Pandoc 包成隐式 figure，同样给图题与编号 */
+.reveal .quarto-figure > figure > figcaption {
+  font-size: .72em; color: #202020; text-align: center;
+  margin-top: calc(9 * var(--pt)); line-height: 1.3;
+}
+.reveal .quarto-figure > figure > p { margin: 0; }
+
+/* ---------- N. 打印 / PDF ---------- */
+html.print-pdf .nc-nav { display: none; }
+html.print-pdf .slide-number { display: block; }
+html.print-pdf .reveal .slides section.is-cover .slide-number { display: none; }
+@media print {
+  .fragment { opacity: 1 !important; transform: none !important; visibility: visible !important; }
+  @page { size: 1280px 720px; margin: 0; }
+}
+html.print-pdf .fragment { opacity: 1 !important; transform: none !important; visibility: visible !important; }
+
+/* ---------- O. 两栏（尊重 width="52%" 等） ---------- */
+.reveal .columns { display: flex; align-items: stretch; gap: .8em; width: 100%; }
+.reveal .columns > .column { flex: 0 0 auto; min-width: 0; box-sizing: border-box; }
+.reveal .columns > .column:only-child { flex: 1 1 auto; }
+.reveal .columns > .column > :first-child { margin-top: 0; }
+
+/* ---------- P. 杂项 ---------- */
+.reveal .slides section .small { font-size: .72em; color: #5B6068; }
+.reveal .slides section .center { text-align: center; }
+.reveal .slides section .mt { margin-top: .6em; }
+.reveal .slides section .mb { margin-bottom: .6em; }
+.reveal .slides section .nowrap { white-space: nowrap; }
+.reveal .slides section img.full { width: 100%; }
+
+/* Quarto menu 插件：保留 M 键目录，隐藏左下角按钮以维持蓝金版面 */
+.reveal .slide-menu-button { display: none; }

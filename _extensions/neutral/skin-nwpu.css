@@ -1,0 +1,30 @@
+/* ============================================================
+   可选机构 VI 皮肤 —— 接入模板（不默认加载）
+   ------------------------------------------------------------
+   本文件【不含】任何第三方校徽 / VI 标识，仓库也不分发该资产。
+   校徽、VI 规范与中文字体均为第三方权利人的受保护资产，
+   使用方须自行取得授权后，再把徽标转成 data URI 填入下方。
+
+   为什么用 data URI：Quarto 的 embed-resources 按工作目录解析
+   CSS 里的相对 url()，CSS 一旦内联成 data: 就丢失路径基准；
+   extension 在 quarto add / use template 两种安装方式下目录也不同。
+   现在不必手工转 data URI —— 用顶层 YAML 的 `brand-logo-file` 指向
+   已获授权的图片，brand-header.lua 会在构建期读文件并自动内联，
+   单文件版与 live 版都保持 0 外链。
+
+   用法（全部是 qmd 顶层 YAML 键，扩展自动注入 <head>）：
+
+     brand-primary: "#0F3D7E"
+     brand-accent:  "#C8A45D"
+     brand-logo-file: "assets/logo.png"
+
+   不要用 `format: ...: css: skin-nwpu.css`，那会覆盖掉扩展默认的
+   neutral.css；需要一次覆盖多个令牌时可用 include-in-header 注入
+   下方 :root 内容。
+   ============================================================ */
+:root {
+  --brand-primary: #0F3D7E;
+  --brand-accent: #C8A45D;
+  /* --brand-logo: url("data:image/png;base64,<在此粘贴已获授权的徽标>"); */
+  /* --brand-unit: "Your Organization";  ← 文案走 YAML，见 template.qmd */
+}

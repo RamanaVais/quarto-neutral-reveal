@@ -1,0 +1,33 @@
+/* 品牌令牌覆盖示例 —— 换一套主色、辅色与图号前缀
+   ------------------------------------------------------------
+   首选：直接写顶层 YAML 参数（brand-header.lua 会自动注入 <head>）：
+
+     brand-primary: "#0B4F4A"
+     brand-accent:  "#B98A3E"
+     fig-label: "Figure "
+
+   想一次覆盖更多令牌时，可用 include-in-header 注入下面这段 :root。
+   注意：不要通过 `format: ...: css: brand-overrides.css` 引入，
+   文档的 css 会替换掉扩展默认的 neutral.css。
+
+     include-in-header:
+       - text: |
+           <style>
+           :root {
+             --brand-primary: #0B4F4A;
+             --brand-accent:  #B98A3E;
+             --fig-label: "Figure ";
+           }
+           </style>
+
+   或者直接把下面这段 :root 内容粘进去。
+   ------------------------------------------------------------ */
+:root {
+  --brand-primary: #0B4F4A;
+  --brand-accent: #B98A3E;
+  --brand-primary-light: #E7F1EF;
+  --brand-primary-pale: #EDF5F3;
+  --brand-accent-light: #F8F1E4;
+  --fig-label: "Figure ";
+  /* --brand-logo: url("data:image/svg+xml;base64,..."); */
+}

@@ -1,0 +1,18 @@
+<section id="$idprefix$title-slide" class="nwpu-cover" data-state="cover" data-chrome="false"$for(title-slide-attributes/pairs)$ $it.key$="$it.value$"$endfor$>
+  <div class="cv-rings" aria-hidden="true"></div>
+  <div class="cv-logo" aria-hidden="true"></div>
+  <div class="cv-body">
+    <p class="cv-tag">$if(brand-tagline)$$brand-tagline$$else$$if(institute)$$for(institute)$$institute$$endfor$$else$YOUR ORGANIZATION · YOUR TEAM$endif$$endif$</p>
+    <h1 class="cv-title">$title$</h1>
+$if(subtitle)$    <p class="cv-sub">$subtitle$</p>$endif$
+    <div class="cv-rule"></div>
+    <div class="cv-meta">
+$if(author)$      <div class="row"><b>汇报人：</b><span>$for(author)$$author$$endfor$</span></div>$endif$
+$if(institute)$      <div class="row"><b>依托单位：</b><span>$for(institute)$$institute$$endfor$</span></div>$endif$
+    </div>
+  </div>
+  <div class="cv-band">
+    <span>$if(brand-unit)$$brand-unit$$else$$if(institute)$$for(institute)$$institute$$endfor$$else$YOUR ORGANIZATION · YOUR TEAM$endif$$endif$</span>
+$if(date)$    <span>$date$</span>$endif$
+  </div>
+</section>

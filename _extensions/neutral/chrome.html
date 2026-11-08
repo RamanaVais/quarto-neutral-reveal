@@ -1,0 +1,182 @@
+<script>
+/* Neutral Reveal —— 每页页眉 / 顶部圆点章节导航 / PART 进度胶囊
+   由 Quarto revealjs 的 include-after-body 注入，位于 Reveal.initialize() 之后。
+   设计要点：给「每一页」克隆注入独立页眉，高亮在生成时预烘焙，
+   不依赖 slidechanged 监听，?print-pdf 下也不会串页。 */
+(function () {
+  if (!window.Reveal) return;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function indices(el) {
+    try { return Reveal.getIndices(el) || { h: 0, v: 0 }; }
+    catch (e) { return { h: 0, v: 0 }; }
+  }
+
+  function boot() {
+    if (Reveal.isReady && Reveal.isReady()) { init(); }
+    else if (Reveal.on) { Reveal.on('ready', init); }
+    else { setTimeout(init, 300); }
+  }
+
+  function init() {
+    var deck = Reveal.getRevealElement ? Reveal.getRevealElement() : document.querySelector('.reveal');
+    var slides = (Reveal.getSlides ? Reveal.getSlides() : []) || [];
+    if (!slides.length) return;
+
+    var outlines = [], parts = [], contents = [];
+
+    /* 页眉固定文字：由 brand-header.lua 从 YAML 的 brand-header 注入 <head>。
+       未配置时为空，此时不输出任何额外节点，页眉 DOM 与旧版逐字一致。 */
+    var brandText = (function () {
+      var m = document.querySelector('meta[name="neutral-brand-header"]');
+      return m ? (m.getAttribute('content') || '').trim() : '';
+    })();
+
+    slides.forEach(function (s) {
+      var meta = s.querySelector('.part-meta');
+      if (s.id === 'title-slide') {
+        s.classList.add('is-cover');
+        s.setAttribute('data-state', 'cover');
+      } else if (s.querySelector('.nwpu-outline')) {
+        s.classList.add('is-outline');
+        s.setAttribute('data-state', 'chromeless');
+        outlines.push(s);
+      } else if (meta) {
+        s.classList.add('is-part');
+        s.setAttribute('data-state', 'chromeless');
+        parts.push(s);
+      } else {
+        s.classList.add('is-content');
+        contents.push(s);
+      }
+    });
+
+    /* 章节表：每个 PART 页对应一个 horizontal stack（h），
+       该 stack 内其余内容页即为圆点数量。 */
+    var chapters = parts.map(function (p) {
+      var meta = p.querySelector('.part-meta');
+      var ix = indices(p);
+      return {
+        h: ix.h,
+        v: ix.v,
+        num: meta.getAttribute('data-section') || '',
+        label: meta.getAttribute('data-nav') || '',
+        part: p,
+        content: []
+      };
+    }).sort(function (a, b) { return a.h - b.h; });
+
+    slides.forEach(function (s) {
+      if (s.classList.contains('is-content')) {
+        var ix = indices(s);
+        var ch = null;
+        for (var i = 0; i < chapters.length; i++) {
+          if (chapters[i].h === ix.h) { ch = chapters[i]; break; }
+          if (chapters[i].h < ix.h) ch = chapters[i];
+        }
+        if (ch) ch.content.push(s);
+      }
+    });
+
+    /* 降级：若 # 没有形成 stack（所有页 h 相同），按 DOM 顺序归章 */
+    if (chapters.length > 1 && chapters.every(function (c) { return c.h === chapters[0].h; })) {
+      var current = null;
+      slides.forEach(function (s) {
+        var meta = s.querySelector('.part-meta');
+        if (meta) {
+          current = chapters.filter(function (c) { return c.part === s; })[0];
+          if (current) current.content = [];
+        } else if (current && s.classList.contains('is-content')) {
+          current.content.push(s);
+        }
+      });
+    }
+
+    /* 注入每页页眉 */
+    contents.forEach(function (s) {
+      var h2 = s.querySelector(':scope > h2');
+      var title = h2 ? h2.textContent.trim() : (s.getAttribute('data-title') || '');
+      if (h2) h2.style.display = 'none';
+
+      var ix = indices(s);
+      var ch = null, dotIdx = -1;
+      for (var i = 0; i < chapters.length; i++) {
+        if (chapters[i].h === ix.h) {
+          ch = chapters[i];
+          dotIdx = ch.content.indexOf(s);
+          break;
+        }
+        if (chapters[i].h < ix.h) ch = chapters[i];
+      }
+      s.insertAdjacentHTML('afterbegin', chromeHTML(chapters, ch, dotIdx, title, brandText));
+    });
+
+    /* PART 页进度胶囊 */
+    parts.forEach(function (p) {
+      var ix = indices(p);
+      var host = p.querySelector('.nwpu-part') || p;
+      host.insertAdjacentHTML('beforeend', pillsHTML(chapters, ix.h));
+    });
+
+    /* 点击跳转：事件委托（栏目、圆点、提纲链接） */
+    if (deck) {
+      deck.addEventListener('click', function (ev) {
+        var t = ev.target.closest ? ev.target.closest('[data-h]') : null;
+        if (t) {
+          ev.preventDefault();
+          var h = parseInt(t.getAttribute('data-h'), 10);
+          var v = parseInt(t.getAttribute('data-v') || '0', 10);
+          if (!isNaN(h)) Reveal.slide(h, isNaN(v) ? 0 : v);
+          return;
+        }
+        var link = ev.target.closest ? ev.target.closest('.nwpu-outline a[href^="#sec-"]') : null;
+        if (link) {
+          var num = (link.getAttribute('href') || '').replace('#sec-', '');
+          var ch = chapters.filter(function (c) { return c.num === num; })[0];
+          if (ch) { ev.preventDefault(); Reveal.slide(ch.h, ch.v); }
+        }
+      });
+    }
+  }
+
+  function chromeHTML(chapters, cur, dotIdx, title, brand) {
+    var nav = chapters.map(function (c) {
+      var on = cur && c.h === cur.h;
+      var firstV = c.content.length ? indices(c.content[0]).v : c.v;
+      var dots = c.content.map(function (s, i) {
+        var active = on && i === dotIdx;
+        return '<i class="nc-dot' + (active ? ' is-on' : '') + '" data-h="' + c.h +
+               '" data-v="' + indices(s).v + '"></i>';
+      }).join('');
+      return '<span class="nc-chap' + (on ? ' is-on' : '') + '" data-h="' + c.h +
+             '" data-v="' + firstV + '"><b>' + esc(c.label) + '</b>' +
+             '<em class="nc-dots">' + dots + '</em></span>';
+    }).join('');
+
+    /* brand 为空时保持原来的单节点结构，不引入额外 wrapper */
+    var right = brand
+      ? '<span class="nc-right"><i class="nc-brand">' + esc(brand) +
+        '</i><span class="nc-logo"></span></span>'
+      : '<span class="nc-logo"></span>';
+
+    return '<div class="nwpu-chrome">' +
+             '<span class="nc-title">' + esc(title) + '</span>' +
+             '<nav class="nc-nav">' + nav + '</nav>' +
+             right +
+           '</div>';
+  }
+
+  function pillsHTML(chapters, h) {
+    return '<div class="part-pills">' + chapters.map(function (c) {
+      return '<span class="pill' + (c.h <= h ? ' is-on' : '') + '">' + esc(c.label) + '</span>';
+    }).join('') + '</div>';
+  }
+
+  boot();
+})();
+</script>

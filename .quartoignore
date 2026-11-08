@@ -1,0 +1,10 @@
+# 开发 / 渲染产物不随模板复制给使用者
+*.html
+*.pdf
+*_files/
+_*.png
+_*.html
+_*.qmd
+_*.lua
+.git/
+.gitignore

@@ -1,0 +1,95 @@
+---
+title: "Neutral Reveal 演示"
+subtitle: "中性可配置的 Quarto reveal.js 格式扩展"
+author: "Your Name"
+institute: "Your Organization"
+date: today
+
+# 这两个键必须放在文档顶层，命令行 -M 才能覆盖出 live 现场版。
+# 不要写进 format: 块里。详见 README「双产物」。
+embed-resources: true
+html-math-method: mathml
+
+# 可选品牌参数（顶层 YAML 键，由扩展的 brand-header.lua 注入 <head>）：
+brand-header: "YOUR ORGANIZATION · COURSE"          # 每页页眉右侧固定文字；删掉此行即不显示
+# brand-tagline: "YOUR ORGANIZATION · YOUR TEAM"   # 封面顶部 tag，不写回退到 institute
+# brand-unit: "Your Organization"                   # 封面底部色带
+# brand-primary: "#0B4F4A"                          # 主色
+# brand-accent: "#B98A3E"                           # 辅色
+# brand-logo-file: "assets/logo.png"                # 构建期读文件内联，单文件/live 都 0 外链
+# brand-logo: 'url("data:image/png;base64,...")'   # 也可直接给 CSS url() 值
+# fig-label: "Figure "                              # 图号前缀
+
+format: neutral-revealjs
+---
+
+## 汇报提纲 {#outline}
+
+::: {.nwpu-outline}
+
+1. [第一章：起步](#sec-01)
+
+:::
+
+# 第一章：起步 {#sec-01}
+
+<div class="nwpu-part">
+<span class="part-meta" data-section="01" data-nav="起步"></span>
+<div class="part-watermark">01</div>
+<div class="part-label">PART 01</div>
+<div class="part-title">第一章：起步</div>
+<div class="part-rule"></div>
+</div>
+
+## 普通页：公式、动画与备注
+
+页眉右侧的固定文字来自 YAML 的 `brand-header`，删掉该行即可关闭。
+
+行内公式 $E = mc^2$，块公式：
+
+$$a^2 + b^2 = c^2$$
+
+. . .
+
+这一行会在按空格后出现（fragment）。
+
+::: {.notes}
+这是讲者备注，按 S 键打开讲者视图查看。
+:::
+
+## Panel 与格内二级细分
+
+::::: {.panel data-mode="3b" style="--px:50%;--py:50%"}
+:::: {.cell data-area="a"}
+
+**通栏格**：跨两列，适合放总览或标题。
+
+::::
+:::: {.cell data-area="b" data-split="v" style="--sx:40%"}
+::: {.sub}
+
+左子格：`data-split="v"` 画竖线。
+
+:::
+::: {.sub}
+
+右子格：`--sx:40%` 控制左轨宽度。
+
+:::
+::::
+:::: {.cell data-area="c"}
+
+普通格：不写 `data-split` 时行为与旧版完全一致。
+
+::::
+:::::
+
+## 图题自动编号
+
+<figure class="nwpu-fig">
+  <figcaption>图题会由 CSS 计数器自动加上「图 N」前缀</figcaption>
+</figure>
+
+::: {.defbox}
+**提示**：图号是装饰性编号，reveal 只渲染当前页时可能重复，正文里不要写「见图 N」。
+:::
